@@ -1,0 +1,44 @@
+{
+  "name": "pi-featherless",
+  "version": "1.0.0",
+  "description": "Featherless.ai provider for pi with /login support and cached model discovery",
+  "keywords": [
+    "featherless",
+    "pi-extension",
+    "pi-package"
+  ],
+  "license": "MIT",
+  "author": "Alex Sehl <widesehl@gmail.com>",
+  "files": [
+    "index.ts"
+  ],
+  "type": "module",
+  "scripts": {
+    "check": "pnpm run lint && pnpm run format-check && pnpm run type-check",
+    "format": "oxfmt --write .",
+    "format-check": "oxfmt --check .",
+    "lint": "oxlint .",
+    "prepublishOnly": "pnpm run check",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.5.0",
+    "@earendil-works/pi-coding-agent": "1.5.0",
+    "@types/node": "^26.6.6",
+    "oxfmt": "^0.78.0",
+    "oxlint": "1.93.0",
+    "typebox": "1.3.27",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "packageManager": "pnpm@11.5.1",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

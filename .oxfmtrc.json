@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": true,
+  "printWidth": 100,
+  "sortImports": true,
+  "sortPackageJson": true,
+  "ignorePatterns": [".agents/**", ".pi/**", "pnpm-lock.yaml"]
+}
