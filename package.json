@@ -1,7 +1,7 @@
 {
   "name": "pi-featherless",
   "version": "1.0.0",
-  "description": "Featherless.ai provider for pi with /login support and cached model discovery",
+  "description": "Featherless.ai provider for Pi coding agent",
   "keywords": [
     "featherless",
     "pi-extension",
