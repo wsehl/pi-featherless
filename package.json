@@ -1,6 +1,6 @@
 {
   "name": "@wsehl/pi-featherless",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Featherless.ai provider for Pi coding agent",
   "keywords": [
     "featherless",
