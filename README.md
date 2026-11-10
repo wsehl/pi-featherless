@@ -1,17 +1,17 @@
 # pi-featherless
 
-[Featherless.ai](https://featherless.ai) provider for [Pi](https://pi.dev)
+[Featherless.ai](https://featherless.ai) provider for Pi coding agent.
 
 ## Install
 
 ```bash
-pi install git:github.com/wsehl/pi-featherless
+pi install npm:@wsehl/pi-featherless
 ```
 
 Try it without installing:
 
 ```bash
-pi -e git:github.com/wsehl/pi-featherless
+pi -e npm:@wsehl/pi-featherless
 ```
 
 ## Set up

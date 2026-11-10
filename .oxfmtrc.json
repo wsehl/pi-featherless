@@ -4,5 +4,5 @@
   "printWidth": 100,
   "sortImports": true,
   "sortPackageJson": true,
-  "ignorePatterns": [".agents/**", ".pi/**", "pnpm-lock.yaml"]
+  "ignorePatterns": [".agents/**", ".pi/**", "pnpm-lock.yaml", "CHANGELOG.md"]
 }
