@@ -27,20 +27,26 @@ const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const REFRESH_TIMEOUT_MS = 30_000;
 const DEFAULT_CONTEXT_WINDOW = 32_768;
 const DEFAULT_MAX_TOKENS = 4_096;
+// Stored in the cache's etag slot (this provider never sends it back). Bump it when
+// toPiModel changes, so cached catalogs in the old shape are refetched immediately.
+const CATALOG_FORMAT = "pi-featherless/2";
 
 // Featherless rejects requests without a User-Agent, and Node's fetch sends none.
 const HEADERS = { "User-Agent": "pi-featherless/1.0" };
 
 const OptionalNumber = Type.Optional(Type.Union([Type.Number(), Type.Null()]));
+const OptionalBoolean = Type.Optional(Type.Union([Type.Boolean(), Type.Null()]));
 
 // Only the fields this provider reads. Other catalog fields are ignored.
 const CatalogEntry = Type.Object({
   id: Type.String({ minLength: 1 }),
+  model_class: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   context_length: OptionalNumber,
   max_completion_tokens: OptionalNumber,
   pricing: Type.Optional(
     Type.Union([Type.Object({ input: OptionalNumber, output: OptionalNumber }), Type.Null()]),
   ),
+  features: Type.Optional(Type.Union([Type.Object({ image_input: OptionalBoolean }), Type.Null()])),
 });
 
 const CatalogResponse = Type.Object({ data: Type.Array(Type.Unknown()) });
@@ -51,6 +57,17 @@ function positiveOr(value: number | null | undefined, fallback: number): number 
   return value !== undefined && value !== null && value > 0 ? value : fallback;
 }
 
+// Qwen3-family chat templates (Qwen3, 3.5, 3.6, ...) think by default and read
+// chat_template_kwargs.enable_thinking. Embedding, TTS, and Coder variants do not think.
+function hasQwenThinking(modelClass: string | null | undefined): boolean {
+  return (
+    modelClass !== undefined &&
+    modelClass !== null &&
+    /^qwen3/i.test(modelClass) &&
+    !/embedding|tts|coder/i.test(modelClass)
+  );
+}
+
 function toPiModel(entry: CatalogEntry): Model<"openai-completions"> {
   const contextWindow = positiveOr(entry.context_length, DEFAULT_CONTEXT_WINDOW);
 
@@ -59,6 +76,9 @@ function toPiModel(entry: CatalogEntry): Model<"openai-completions"> {
     Math.min(DEFAULT_MAX_TOKENS, contextWindow),
   );
 
+  // Without this, thinking stays on even at thinking level "off" and uses up the output budget.
+  const reasoning = hasQwenThinking(entry.model_class);
+
   return {
     id: entry.id,
     name: entry.id,
@@ -66,9 +86,8 @@ function toPiModel(entry: CatalogEntry): Model<"openai-completions"> {
     provider: PROVIDER,
     baseUrl: BASE_URL,
     headers: HEADERS,
-    // The catalog does not report reasoning, tool-use, or vision support.
-    reasoning: false,
-    input: ["text"],
+    reasoning,
+    input: entry.features?.image_input === true ? ["text", "image"] : ["text"],
     cost: {
       input: entry.pricing?.input ?? 0,
       output: entry.pricing?.output ?? 0,
@@ -81,8 +100,44 @@ function toPiModel(entry: CatalogEntry): Model<"openai-completions"> {
       supportsDeveloperRole: false,
       supportsReasoningEffort: false,
       maxTokensField: "max_tokens",
+      ...(reasoning ? { thinkingFormat: "qwen-chat-template" as const } : {}),
     },
   };
+}
+
+type PayloadOptions = {
+  maxTokens?: number;
+  onPayload?: (payload: unknown, model: Model<"openai-completions">) => unknown;
+};
+
+/**
+ * Pi caps max_tokens at the context window minus a character-based prompt estimate.
+ * That estimate counts old thinking, which the chat template drops, so after compaction
+ * it can leave almost no room (down to max_tokens=1) and every reply is truncated.
+ * Featherless rejects prompt + max_tokens above the context size, and when max_tokens
+ * is omitted it allows the rest of the context. So let the server size the output
+ * unless the caller asked for a specific limit.
+ */
+function serverSizedOutput<T extends PayloadOptions>(options: T | undefined): T | undefined {
+  if (options?.maxTokens !== undefined) {
+    return options;
+  }
+
+  const onPayload = options?.onPayload;
+
+  return {
+    ...options,
+    onPayload: async (payload: unknown, model: Model<"openai-completions">) => {
+      let next = payload;
+
+      if (typeof payload === "object" && payload !== null && "max_tokens" in payload) {
+        const { max_tokens: _omitted, ...rest } = payload;
+        next = rest;
+      }
+
+      return (await onPayload?.(next, model)) ?? next;
+    },
+  } as T;
 }
 
 async function fetchCatalog(signal: AbortSignal): Promise<Model<"openai-completions">[]> {
@@ -139,7 +194,9 @@ function createFeatherlessProvider(): Provider<"openai-completions"> {
     }
 
     const fresh =
-      stored?.checkedAt !== undefined && Date.now() - stored.checkedAt < REFRESH_INTERVAL_MS;
+      stored?.etag === CATALOG_FORMAT &&
+      stored.checkedAt !== undefined &&
+      Date.now() - stored.checkedAt < REFRESH_INTERVAL_MS;
 
     if (fresh && !context.force && models.length > 0) {
       return;
@@ -152,7 +209,7 @@ function createFeatherlessProvider(): Provider<"openai-completions"> {
     }
 
     await context.publish({
-      persist: { models: refreshed, checkedAt: Date.now() },
+      persist: { models: refreshed, checkedAt: Date.now(), etag: CATALOG_FORMAT },
       update: () => {
         models = refreshed;
       },
@@ -191,8 +248,9 @@ function createFeatherlessProvider(): Provider<"openai-completions"> {
     },
     getModels: () => models,
     refreshModels,
-    stream: (model, context, options) => streams.stream(model, context, options),
-    streamSimple: (model, context, options) => streams.streamSimple(model, context, options),
+    stream: (model, context, options) => streams.stream(model, context, serverSizedOutput(options)),
+    streamSimple: (model, context, options) =>
+      streams.streamSimple(model, context, serverSizedOutput(options)),
   };
 }
 

@@ -30,8 +30,13 @@ pi --model featherless/Qwen/Qwen2.5-7B-Instruct
 
 - The catalog is cached in `models-store.json` and refreshed at most every 6 hours.
   Startup does not wait for the network. Set `PI_OFFLINE=1` to skip refreshes.
-- Models are registered as text-only and without thinking support, because the Featherless
-  catalog does not report tool or reasoning capabilities. Small models handle pi's tools poorly.
+- Image input follows the catalog's `image_input` flag. Qwen3-family models get thinking support,
+  and pi's thinking level toggles it through `chat_template_kwargs.enable_thinking`. At level
+  `off` they answer without thinking. Other models are registered without thinking support.
+  Small models handle pi's tools poorly.
+- `max_tokens` is left out of requests, so Featherless allows whatever context remains. Pi's own
+  estimate counts old thinking that the server drops, and after compaction it could cap replies
+  at a few tokens.
 - Featherless context-overflow errors are normalised so pi can compact and retry.
 
 ## Development
